@@ -1,0 +1,21 @@
+{
+    "name": "Task Time Tracker",
+    "short_name": "TimeTracker",
+    "description": "Track your tasks and stay focused with regular reminders",
+    "start_url": "/",
+    "display": "standalone",
+    "background_color": "#2196F3",
+    "theme_color": "#2196F3",
+    "orientation": "portrait-primary",
+    "icons": [
+        
+    ],
+    "categories": ["productivity", "utilities"],
+    "screenshots": [
+        {
+            "src": "screenshot1.png",
+            "sizes": "1280x720",
+            "type": "image/png"
+        }
+    ]
+}
