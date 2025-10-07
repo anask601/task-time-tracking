@@ -86,7 +86,9 @@ class TaskTimeTracker {
                 switch (e.key) {
                     case 's':
                         e.preventDefault();
-                        if (!this.isRunning) this.startTask();
+                        if (!this.isRunning && this.elements.taskNameInput.value.trim()) {
+                            this.startTask();
+                        }
                         break;
                     case 'p':
                         e.preventDefault();
@@ -100,16 +102,37 @@ class TaskTimeTracker {
             }
         });
 
-        // Auto-save task name
+        // Update button states when user types in task name
         this.elements.taskNameInput.addEventListener('input', () => {
+            this.updateButtonStates();
             this.saveToLocalStorage();
+        });
+
+        // Also update on paste and cut events
+        this.elements.taskNameInput.addEventListener('paste', () => {
+            setTimeout(() => {
+                this.updateButtonStates();
+                this.saveToLocalStorage();
+            }, 10);
+        });
+
+        this.elements.taskNameInput.addEventListener('cut', () => {
+            setTimeout(() => {
+                this.updateButtonStates();
+                this.saveToLocalStorage();
+            }, 10);
         });
 
         // Enter key to start task
         this.elements.taskNameInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter' && !this.isRunning) {
+            if (e.key === 'Enter' && !this.isRunning && this.elements.taskNameInput.value.trim()) {
                 this.startTask();
             }
+        });
+
+        // Update button states when input loses focus
+        this.elements.taskNameInput.addEventListener('blur', () => {
+            this.updateButtonStates();
         });
     }
 
@@ -318,9 +341,14 @@ class TaskTimeTracker {
     updateButtonStates() {
         const hasTaskName = this.elements.taskNameInput.value.trim().length > 0;
         
+        // FIXED: Simplified button state logic without style interference
         this.elements.startBtn.disabled = this.isRunning || !hasTaskName;
         this.elements.pauseBtn.disabled = !this.isRunning;
         this.elements.stopBtn.disabled = !this.isRunning && !this.isPaused;
+
+        // Remove any inline styles that might interfere
+        this.elements.startBtn.style.opacity = '';
+        this.elements.startBtn.style.cursor = '';
     }
 
     updateDisplay() {
