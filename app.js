@@ -3,6 +3,7 @@ class TaskTimeTracker {
         this.currentTask = null;
         this.startTime = null;
         this.elapsedTime = 0;
+        this.savedElapsedTime = 0; // FIXED: Store elapsed time when paused
         this.isRunning = false;
         this.isPaused = false;
         this.taskHistory = this.loadTaskHistory();
@@ -51,8 +52,15 @@ class TaskTimeTracker {
     }
 
     bindEvents() {
-        // Task control buttons
-        this.elements.startBtn.addEventListener('click', () => this.startTask());
+        // FIXED: Direct function calls instead of changing onclick
+        this.elements.startBtn.addEventListener('click', () => {
+            if (this.isPaused) {
+                this.resumeTask();
+            } else {
+                this.startTask();
+            }
+        });
+        
         this.elements.pauseBtn.addEventListener('click', () => this.pauseTask());
         this.elements.stopBtn.addEventListener('click', () => this.stopTask());
 
@@ -86,17 +94,23 @@ class TaskTimeTracker {
                 switch (e.key) {
                     case 's':
                         e.preventDefault();
-                        if (!this.isRunning && this.elements.taskNameInput.value.trim()) {
+                        if (this.isPaused) {
+                            this.resumeTask();
+                        } else if (!this.isRunning && this.elements.taskNameInput.value.trim()) {
                             this.startTask();
                         }
                         break;
                     case 'p':
                         e.preventDefault();
-                        if (this.isRunning) this.pauseTask();
+                        if (this.isRunning) {
+                            this.pauseTask();
+                        } else if (this.isPaused) {
+                            this.resumeTask();
+                        }
                         break;
                     case 'q':
                         e.preventDefault();
-                        if (this.isRunning) this.stopTask();
+                        if (this.isRunning || this.isPaused) this.stopTask();
                         break;
                 }
             }
@@ -108,7 +122,6 @@ class TaskTimeTracker {
             this.saveToLocalStorage();
         });
 
-        // Also update on paste and cut events
         this.elements.taskNameInput.addEventListener('paste', () => {
             setTimeout(() => {
                 this.updateButtonStates();
@@ -123,14 +136,17 @@ class TaskTimeTracker {
             }, 10);
         });
 
-        // Enter key to start task
+        // Enter key to start task or resume if paused
         this.elements.taskNameInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter' && !this.isRunning && this.elements.taskNameInput.value.trim()) {
-                this.startTask();
+            if (e.key === 'Enter') {
+                if (this.isPaused) {
+                    this.resumeTask();
+                } else if (!this.isRunning && this.elements.taskNameInput.value.trim()) {
+                    this.startTask();
+                }
             }
         });
 
-        // Update button states when input loses focus
         this.elements.taskNameInput.addEventListener('blur', () => {
             this.updateButtonStates();
         });
@@ -191,6 +207,7 @@ class TaskTimeTracker {
         this.isRunning = true;
         this.isPaused = false;
         this.elapsedTime = 0;
+        this.savedElapsedTime = 0; // FIXED: Reset saved time for new task
 
         this.updateButtonStates();
         this.startTimer();
@@ -204,19 +221,48 @@ class TaskTimeTracker {
     }
 
     pauseTask() {
+        if (!this.isRunning) return;
+        
+        // FIXED: Save current elapsed time before stopping
+        this.savedElapsedTime = this.elapsedTime;
+        
         this.isRunning = false;
         this.isPaused = true;
-        this.stopTimer();
+        
+        this.stopTimer(); // FIXED: This actually stops the timer now
         this.stopReminderTimer();
         
         this.updateButtonStates();
         this.showNotification(`Paused task: ${this.currentTask}`, 'warning');
         this.elements.connectionStatus.textContent = 'Paused';
+        
+        console.log('Task paused at:', this.formatTime(this.savedElapsedTime));
+    }
+
+    resumeTask() {
+        if (!this.isPaused) return;
+
+        // FIXED: Start timer from saved elapsed time
+        this.startTime = new Date() - this.savedElapsedTime; // Adjust start time
+        this.isRunning = true;
+        this.isPaused = false;
+
+        this.updateButtonStates();
+        this.startTimer();
+        
+        if (this.remindersEnabled) {
+            this.startReminderTimer();
+        }
+
+        this.showNotification(`Resumed task: ${this.currentTask}`, 'success');
+        this.elements.connectionStatus.textContent = 'Running';
+        
+        console.log('Task resumed from:', this.formatTime(this.savedElapsedTime));
     }
 
     stopTask() {
         const endTime = new Date();
-        const duration = this.elapsedTime;
+        const finalDuration = this.isPaused ? this.savedElapsedTime : this.elapsedTime;
 
         // Save completed task
         const taskRecord = {
@@ -224,17 +270,18 @@ class TaskTimeTracker {
             name: this.currentTask,
             startTime: this.startTime,
             endTime: endTime,
-            duration: duration,
+            duration: finalDuration,
             focusResponses: [...this.focusResponses]
         };
 
         this.taskHistory.unshift(taskRecord);
         this.saveTaskHistory();
 
-        // Reset state
+        // FIXED: Reset all state properly
         this.currentTask = null;
         this.startTime = null;
         this.elapsedTime = 0;
+        this.savedElapsedTime = 0;
         this.isRunning = false;
         this.isPaused = false;
         this.focusResponses = [];
@@ -249,21 +296,28 @@ class TaskTimeTracker {
         this.elements.taskNameInput.value = '';
         this.elements.taskNameInput.focus();
 
-        this.showNotification(`Completed task! Duration: ${this.formatTime(duration)}`, 'success');
+        this.showNotification(`Completed task! Duration: ${this.formatTime(finalDuration)}`, 'success');
         this.elements.connectionStatus.textContent = 'Ready';
     }
 
     startTimer() {
+        // FIXED: Clear any existing timer first
+        this.stopTimer();
+        
         this.timerInterval = setInterval(() => {
-            this.elapsedTime = Date.now() - this.startTime.getTime();
+            // FIXED: Simple calculation from start time
+            this.elapsedTime = new Date() - this.startTime;
             this.updateDisplay();
         }, 1000);
+        
+        console.log('Timer started');
     }
 
     stopTimer() {
         if (this.timerInterval) {
             clearInterval(this.timerInterval);
             this.timerInterval = null;
+            console.log('Timer stopped');
         }
     }
 
@@ -313,7 +367,6 @@ class TaskTimeTracker {
             }
         }, 1000);
 
-        // Store interval to clear it if user responds
         this.modalCountdownInterval = countdownInterval;
     }
 
@@ -341,10 +394,25 @@ class TaskTimeTracker {
     updateButtonStates() {
         const hasTaskName = this.elements.taskNameInput.value.trim().length > 0;
         
-        // FIXED: Simplified button state logic without style interference
-        this.elements.startBtn.disabled = this.isRunning || !hasTaskName;
-        this.elements.pauseBtn.disabled = !this.isRunning;
-        this.elements.stopBtn.disabled = !this.isRunning && !this.isPaused;
+        if (this.isRunning) {
+            // Task is currently running
+            this.elements.startBtn.disabled = true;
+            this.elements.startBtn.innerHTML = '<span class="btn-icon">▶️</span> Start';
+            this.elements.pauseBtn.disabled = false;
+            this.elements.stopBtn.disabled = false;
+        } else if (this.isPaused) {
+            // Task is paused - start button becomes resume
+            this.elements.startBtn.disabled = false;
+            this.elements.startBtn.innerHTML = '<span class="btn-icon">▶️</span> Resume';
+            this.elements.pauseBtn.disabled = true;
+            this.elements.stopBtn.disabled = false;
+        } else {
+            // Ready state - no active task
+            this.elements.startBtn.disabled = !hasTaskName;
+            this.elements.startBtn.innerHTML = '<span class="btn-icon">▶️</span> Start';
+            this.elements.pauseBtn.disabled = true;
+            this.elements.stopBtn.disabled = true;
+        }
 
         // Remove any inline styles that might interfere
         this.elements.startBtn.style.opacity = '';
@@ -352,8 +420,9 @@ class TaskTimeTracker {
     }
 
     updateDisplay() {
-        // Current time
-        this.elements.currentTime.textContent = this.formatTime(this.elapsedTime);
+        // FIXED: Use appropriate time based on state
+        const displayTime = this.isPaused ? this.savedElapsedTime : this.elapsedTime;
+        this.elements.currentTime.textContent = this.formatTime(displayTime);
 
         // Task status
         if (this.isRunning) {
@@ -441,6 +510,8 @@ class TaskTimeTracker {
     }
 
     formatTime(milliseconds) {
+        if (!milliseconds || milliseconds < 0) milliseconds = 0;
+        
         const totalSeconds = Math.floor(milliseconds / 1000);
         const hours = Math.floor(totalSeconds / 3600);
         const minutes = Math.floor((totalSeconds % 3600) / 60);
@@ -564,6 +635,7 @@ class TaskTimeTracker {
                 currentTask: this.currentTask,
                 startTime: this.startTime,
                 elapsedTime: this.elapsedTime,
+                savedElapsedTime: this.savedElapsedTime, // FIXED: Save the paused time
                 isRunning: this.isRunning,
                 isPaused: this.isPaused,
                 remindersEnabled: this.remindersEnabled,
@@ -590,20 +662,37 @@ class TaskTimeTracker {
                     this.elements.enableReminders.checked = parsed.remindersEnabled;
                 }
 
-                // Restore running task if app was closed while running
-                if (parsed.isRunning && parsed.startTime) {
+                // FIXED: Restore running or paused task properly
+                if ((parsed.isRunning || parsed.isPaused) && parsed.startTime && parsed.currentTask) {
                     this.currentTask = parsed.currentTask;
-                    this.startTime = new Date(parsed.startTime);
-                    this.isRunning = true;
-                    this.isPaused = false;
-                    this.startTimer();
+                    this.isRunning = parsed.isRunning;
+                    this.isPaused = parsed.isPaused;
+                    this.savedElapsedTime = parsed.savedElapsedTime || 0;
                     
-                    if (this.remindersEnabled) {
-                        this.startReminderTimer();
+                    if (this.isRunning) {
+                        // FIXED: Restore running task with proper time calculation
+                        const now = new Date();
+                        const savedStartTime = new Date(parsed.startTime);
+                        const timeElapsedSinceClose = now - savedStartTime;
+                        
+                        this.startTime = now - timeElapsedSinceClose;
+                        this.elapsedTime = timeElapsedSinceClose;
+                        
+                        this.startTimer();
+                        
+                        if (this.remindersEnabled) {
+                            this.startReminderTimer();
+                        }
+                        
+                        this.showNotification('Restored running task', 'info');
+                    } else if (this.isPaused) {
+                        // FIXED: Restore paused task with saved time
+                        this.elapsedTime = this.savedElapsedTime;
+                        this.showNotification('Restored paused task - click Resume to continue', 'info');
                     }
                     
                     this.updateButtonStates();
-                    this.showNotification('Restored running task', 'info');
+                    this.updateDisplay();
                 }
             }
         } catch (error) {
@@ -637,9 +726,9 @@ class TaskTimeTracker {
             if (document.hidden) {
                 this.saveToLocalStorage();
             } else {
-                // Sync time when returning to tab
+                // FIXED: Sync time when returning to tab only if running
                 if (this.isRunning && this.startTime) {
-                    this.elapsedTime = Date.now() - this.startTime.getTime();
+                    this.elapsedTime = new Date() - this.startTime;
                     this.updateDisplay();
                 }
             }
